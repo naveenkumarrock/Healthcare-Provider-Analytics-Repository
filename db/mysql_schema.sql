@@ -14,6 +14,7 @@ DROP TABLE IF EXISTS stg_conditions;
 DROP TABLE IF EXISTS stg_encounters;
 DROP TABLE IF EXISTS stg_patients;
 DROP TABLE IF EXISTS stg_providers;
+DROP TABLE IF EXISTS stg_organizations;
 DROP TABLE IF EXISTS stg_hospital_readmissions;
 
 CREATE TABLE stg_providers (

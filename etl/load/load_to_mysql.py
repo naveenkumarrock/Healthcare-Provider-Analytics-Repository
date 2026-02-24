@@ -234,8 +234,26 @@ def main():
         print(f"✓ {count} procedures loaded")
         logger.info(f"✓ {count} procedures loaded")
 
-        logger.info("[6] Loading CMS readmissions...")
-        print("[6] Loading CMS readmissions...")
+        print("[6] Loading organizations...")
+        logger.info("[6] Loading organizations...")
+
+        count = load_csv_to_table(
+            cursor,
+            SYNTHEA_DIR + "organizations.csv",
+            "stg_organizations",
+            {
+                "id": "Id",
+                "name": "NAME"
+            },
+        )
+
+        conn.commit()
+
+        print(f"✓ {count} organizations loaded")
+        logger.info(f"✓ {count} organizations loaded")
+
+        logger.info("[7] Loading CMS readmissions...")
+        print("[7] Loading CMS readmissions...")
         count = load_csv_to_table(
             cursor,
             CMS_DIR + "FY_2025_Hospital_Readmissions_Reduction_Program_Hospital.csv",

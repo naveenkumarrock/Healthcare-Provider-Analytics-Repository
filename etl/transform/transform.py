@@ -4,6 +4,7 @@ Transform module: Clean data, calculate healthcare metrics, build star schema ta
 
 import pandas as pd
 import numpy as np
+import re
 from datetime import datetime
 
 
@@ -19,6 +20,7 @@ def transform_all(raw_data: dict) -> dict:
     dim_patients = build_dim_patients(raw_data["patients"])
     dim_conditions = build_dim_conditions(raw_data["conditions"])
     dim_date = build_dim_date(raw_data["encounters"])
+    dim_organizations = build_dim_organizations(raw_data["organizations"])
 
     # Build facts
     fact_encounters = build_fact_encounters(raw_data["encounters"], dim_providers, dim_patients, dim_date)
@@ -26,7 +28,11 @@ def transform_all(raw_data: dict) -> dict:
     fact_readmissions = build_fact_readmissions(raw_data["readmissions"])
 
     # Build data marts
-    mart_provider_productivity = build_mart_provider_productivity(fact_encounters, dim_providers)
+    mart_provider_productivity = build_mart_provider_productivity(
+    fact_encounters,
+    dim_providers,
+    dim_organizations
+    )
     mart_appointment_analytics = build_mart_appointment_analytics(fact_encounters, dim_date)
 
     transformed = {
@@ -34,6 +40,7 @@ def transform_all(raw_data: dict) -> dict:
         "dim_patients": dim_patients,
         "dim_conditions": dim_conditions,
         "dim_date": dim_date,
+        "dim_organizations": dim_organizations,
         "fact_encounters": fact_encounters,
         "fact_procedures": fact_procedures,
         "fact_readmissions": fact_readmissions,
@@ -52,11 +59,16 @@ def transform_all(raw_data: dict) -> dict:
 def build_dim_providers(providers_df: pd.DataFrame) -> pd.DataFrame:
     """Build provider dimension table."""
     dim = providers_df.copy()
-    dim = dim.rename(columns={"provider_id": "provider_key"})
+
+    dim = dim.rename(columns={
+        "provider_id": "provider_key",
+        "organization_id": "organization_key"
+    })
+
     dim["provider_id"] = dim["provider_key"]
-    # Clean specialty field
+
     dim["speciality"] = dim["speciality"].fillna("Unknown")
-    dim["organization"] = dim["organization"].fillna("Unknown")
+
     return dim
 
 
@@ -116,6 +128,17 @@ def build_dim_date(encounters_df: pd.DataFrame) -> pd.DataFrame:
         })
 
     return pd.DataFrame(records)
+
+def build_dim_organizations(org_df: pd.DataFrame) -> pd.DataFrame:
+    """Build organization dimension table."""
+    dim = org_df.copy()
+    dim = dim.rename(columns={
+        "id": "organization_key",
+        "name": "organization_name"
+    })
+    dim["organization_id"] = dim["organization_key"]
+    dim["organization_name"] = dim["organization_name"].fillna("Unknown")
+    return dim[["organization_key", "organization_id", "organization_name"]]
 
 
 # ---- Fact Builders ----
@@ -184,8 +207,9 @@ def build_fact_readmissions(readmissions_df):
 
 # ---- Data Mart Builders ----
 
-def build_mart_provider_productivity(fact_encounters, dim_providers):
+def build_mart_provider_productivity(fact_encounters, dim_providers, dim_organizations):
     """Build provider productivity data mart."""
+    
     agg = fact_encounters.groupby("provider_key").agg(
         total_encounters=("encounter_id", "count"),
         unique_patients=("patient_key", "nunique"),
@@ -201,12 +225,36 @@ def build_mart_provider_productivity(fact_encounters, dim_providers):
     agg["total_revenue"] = agg["total_revenue"].round(2)
     agg["avg_cost_per_encounter"] = agg["avg_cost_per_encounter"].round(2)
 
-    # Merge provider details
-    provider_cols = ["provider_key", "provider_id", "name", "speciality", "organization"]
-    existing_cols = [c for c in provider_cols if c in dim_providers.columns]
-    mart = agg.merge(dim_providers[existing_cols], on="provider_key", how="left")
+    # -----------------------------
+    # Merge Provider Dimension
+    # -----------------------------
+    provider_cols = ["provider_key", "provider_id", "name", "speciality", "organization_key"]
+    mart = agg.merge(
+        dim_providers[provider_cols],
+        on="provider_key",
+        how="left"
+    )
 
+    # -----------------------------
+    # Merge Organization Dimension
+    # -----------------------------
+    mart = mart.merge(
+        dim_organizations[["organization_key", "organization_name"]],
+        on="organization_key",
+        how="left"
+    )
+
+    # Rename provider name column
     mart = mart.rename(columns={"name": "provider_name"})
+
+    # Clean provider name (remove numbers + format)
+    mart["provider_name"] = (
+        mart["provider_name"]
+        .str.replace(r"\d+", "", regex=True)
+        .str.strip()
+        .str.title()
+    )
+
     return mart
 
 

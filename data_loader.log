@@ -1,0 +1,10 @@
+2026-02-24 11:43:38,674 | INFO | ==================================================
+2026-02-24 11:43:38,674 | INFO | MySQL Data Loader (Simple Version)
+2026-02-24 11:43:38,674 | INFO | ==================================================
+2026-02-24 11:43:39,154 | INFO | [6] Loading organizations...
+2026-02-24 11:43:39,370 | ERROR | MySQL error while inserting into stg_organizations: 1406 (22001): Data too long for column 'name' at row 14
+2026-02-24 11:43:39,372 | ERROR | MySQL Error: 1406 (22001): Data too long for column 'name' at row 14
+2026-02-24 11:45:42,693 | INFO | ==================================================
+2026-02-24 11:45:42,694 | INFO | MySQL Data Loader (Simple Version)
+2026-02-24 11:45:42,695 | INFO | ==================================================
+2026-02-24 11:45:42,833 | INFO | [6] Loading organizations...

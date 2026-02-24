@@ -27,9 +27,9 @@ def extract_from_mysql():
         "encounters": pd.read_sql("SELECT * FROM stg_encounters", engine),
         "conditions": pd.read_sql("SELECT * FROM stg_conditions", engine),
         "procedures": pd.read_sql("SELECT * FROM stg_procedures", engine),
+        "organizations": pd.read_sql("SELECT * FROM stg_organizations", engine),
         "readmissions": pd.read_sql("SELECT * FROM stg_hospital_readmissions", engine),
     }
-
     engine.dispose()
     print("✓ Extraction complete")
     return data
