@@ -97,7 +97,7 @@ if page == "Overview":
     )
 
     # Set y-axis from 0 to 50 with ticks every 10
-    fig.update_yaxes(range=[0, 75], dtick=15)
+    fig.update_yaxes(range=[0, 30], dtick=10)
 
     # Optional: make x-axis show years clearly
     fig.update_xaxes(
