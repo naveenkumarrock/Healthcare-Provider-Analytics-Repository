@@ -3,10 +3,6 @@ Transform module: Clean data, calculate healthcare metrics, build star schema ta
 """
 
 import pandas as pd
-import numpy as np
-import re
-from datetime import datetime
-
 
 def transform_all(raw_data: dict) -> dict:
     """
@@ -20,7 +16,6 @@ def transform_all(raw_data: dict) -> dict:
     dim_patients = build_dim_patients(raw_data["patients"])
     dim_conditions = build_dim_conditions(raw_data["conditions"])
     dim_date = build_dim_date(raw_data["encounters"])
-    dim_organizations = build_dim_organizations(raw_data["organizations"])
 
     # Build facts
     fact_encounters = build_fact_encounters(raw_data["encounters"], dim_providers, dim_patients, dim_date)
@@ -28,11 +23,7 @@ def transform_all(raw_data: dict) -> dict:
     fact_readmissions = build_fact_readmissions(raw_data["readmissions"])
 
     # Build data marts
-    mart_provider_productivity = build_mart_provider_productivity(
-    fact_encounters,
-    dim_providers,
-    dim_organizations
-    )
+    mart_provider_productivity = build_mart_provider_productivity(fact_encounters,dim_providers)
     mart_appointment_analytics = build_mart_appointment_analytics(fact_encounters, dim_date)
 
     transformed = {
@@ -40,7 +31,6 @@ def transform_all(raw_data: dict) -> dict:
         "dim_patients": dim_patients,
         "dim_conditions": dim_conditions,
         "dim_date": dim_date,
-        "dim_organizations": dim_organizations,
         "fact_encounters": fact_encounters,
         "fact_procedures": fact_procedures,
         "fact_readmissions": fact_readmissions,
@@ -49,7 +39,7 @@ def transform_all(raw_data: dict) -> dict:
     }
 
     for name, df in transformed.items():
-        print(f"    ✓ {name}: {len(df)} rows, {len(df.columns)} cols")
+        print(f"✓ {name}: {len(df)} rows, {len(df.columns)} cols")
 
     return transformed
 

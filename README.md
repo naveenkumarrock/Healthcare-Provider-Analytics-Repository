@@ -46,7 +46,7 @@ An end-to-end healthcare provider analytics system integrating synthetic patient
 
 ```bash
 git clone <repo-url>
-cd DataFoundation
+cd REVATURE_PROJECT
 python -m venv .venv
 .venv\Scripts\activate        # Windows
 pip install -r requirements.txt
@@ -59,16 +59,22 @@ copy .env.example .env
 # Edit .env with your MySQL and BigQuery credentials
 ```
 
-### 3. Load Data into MySQL
+### 3. Create Database Schema in MySQL
 
 ```bash
-python scripts/load_to_mysql.py
+mysql -u root -p < db/mysql_schema.sql
 ```
 
-### 4. Run ETL Pipeline (MySQL → BigQuery)
+### 4. Load Data into MySQL (Staging DB)
 
 ```bash
-python -m etl.pipeline
+python etl/load/load_to_mysql.py
+```
+
+### 5. Run ETL Pipeline (MySQL → BigQuery)
+
+```bash
+python -m etl/transform/pipeline.py
 ```
 
 ### 5. Start the REST API
@@ -135,7 +141,6 @@ DataFoundation/
 
 - **Provider Productivity**: Encounters per provider, avg duration, patient volume, specialty breakdown
 - **Appointment Analytics**: Trends over time, encounter type distribution, utilization rates
-- **Readmissions Analysis**: Hospital comparison, readmission rates, excess readmission ratios
 
 ---
 
