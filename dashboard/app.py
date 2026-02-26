@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import pandas as pd
+import numpy as np
 import plotly.express as px
 import matplotlib.pyplot as plt
 
@@ -93,7 +94,12 @@ if page == "Overview":
         y="total_appointments",
         color="encounter_class",
         markers=True,
-        title="📊 Appointments Trend (2015 - 2020)"
+        title="📊 Appointments Trend (2015 - 2020)",
+        labels={
+        "month_year": "Year",
+        "total_appointments": "Number Of Appointments",
+        "encounter_class": "Encounter Type"
+    }
     )
 
     # Set y-axis from 0 to 50 with ticks every 10
@@ -116,48 +122,36 @@ if page == "Overview":
         z="total_appointments",
         title="🔥 Monthly Appointments Heatmap",
         color_continuous_scale="Viridis",
-        template="plotly_white"
+        template="plotly_white",
+        labels = {
+            "year" : "Year",
+            "month" : "Month"
+        }
     )
     st.plotly_chart(fig_heat, use_container_width=True)
 
     # Group and sort
     if "encounter_class" in df_appointments.columns:
-        df_pie = df_appointments.groupby("encounter_class")["total_appointments"].sum().reset_index()
-        df_pie = df_pie.sort_values("total_appointments", ascending=False)
-    else:
-        st.warning("'encounter_class' column not found. Showing total by speciality instead.")
-        df_pie = df_appointments.groupby("speciality")["total_appointments"].sum().reset_index()
-    df_pie = df_pie.sort_values("total_appointments", ascending=False)
-
-    # Keep Top 5
-    top_n = 5
-    df_top = df_pie.head(top_n)
-    df_others = df_pie.iloc[top_n:]
-
-    # Combine others
-    if not df_others.empty:
-        others_sum = df_others["total_appointments"].sum()
-        df_top = pd.concat([
-            df_top,
-            pd.DataFrame([{
-                "encounter_class": "Others",
-                "total_appointments": others_sum
-            }])
-        ])
+        df_pie = (
+            df_appointments
+            .groupby("encounter_class")["total_appointments"]
+            .sum()
+            .reset_index()
+            .sort_values("total_appointments", ascending=False)
+        )
 
     # Create pie chart
     fig_pie = px.pie(
-        df_top,
-        names="encounter_class",
+        df_pie,
+        names="encounter_class" if "encounter_class" in df_appointments.columns else "speciality",
         values="total_appointments",
-        title="🥧 Top Encounter Classes (Others Combined)",
+        title="🥧 Encounter Class Distribution"
     )
 
-    fig_pie.update_traces(textinfo='percent+label')
+    fig_pie.update_traces(textinfo="percent+label",rotation=2)
     fig_pie.update_layout(height=450)
 
     st.plotly_chart(fig_pie, use_container_width=True)
-
         
 
 # --------------------------
@@ -179,7 +173,7 @@ elif page == "Provider Analytics":
     col1, col2, col3, col4 = st.columns(4)
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("👨‍⚕️ Total Providers", df["provider_name"].nunique())
-    col2.metric("📅 Total Encounters", df["total_encounters"].sum() if "total_encounters" in df.columns else 0)
+    col2.metric("📅 Total Encounters", int(df["total_encounters"].sum()) if "total_encounters" in df.columns else 0)
     col3.metric("🧑‍🤝‍🧑 Unique Patients", df["unique_patients"].sum() if "unique_patients" in df.columns else 0)
     total_revenue = df['total_revenue'].sum() if "total_revenue" in df.columns else 0
     total_revenue_million = total_revenue / 1_000_000
@@ -191,56 +185,85 @@ elif page == "Provider Analytics":
     # --------------------------
     # 📊 Visualizations
     # --------------------------
-
     # 1️⃣ Total Encounters by Provider (Top 10)
     top10_df = df.sort_values("total_encounters", ascending=False).head(10)
 
     fig1 = px.bar(
         top10_df,
-        y="provider_name",
-        x="total_encounters",
+        x="provider_name",          # X-axis → Provider
+        y="total_encounters",       # Y-axis → Encounters
         color="total_encounters",
-        orientation="h",
         hover_data=["unique_patients", "total_revenue", "avg_encounter_duration_hrs"],
-        title="🧑‍⚕️ Top 10 Providers by Total Encounters"
+        title="🧑‍⚕️ Top 10 Providers by Total Encounters",
+        labels = {
+            "total_encounters" : "Total Encounters"
+        }
     )
+
     fig1.update_layout(
-        yaxis={'categoryorder':'total ascending'},
-        height=500
+        height=500,
+        xaxis_title="Provider Name",
+        yaxis_title="Total Encounters",
+        xaxis_tickangle=-45  # Rotate labels if names are long
     )
+
     st.plotly_chart(fig1, use_container_width=True)
 
-    # 2️⃣ Revenue by Provider (Top 10)
+  # 2️⃣ Revenue by Provider (Top 10)
     top10_revenue = df.sort_values("total_revenue", ascending=False).head(10)
 
-    fig2 = px.bar(
+    # Function to convert numbers to K / M format
+    def format_currency(value):
+        if value >= 1_000_000:
+            return f"${value/1_000_000:.2f}M"
+        elif value >= 1_000:
+            return f"${value/1_000:.1f}K"
+        else:
+            return f"${value:.2f}"
+
+    # Create formatted column
+    top10_revenue["revenue_label"] = top10_revenue["total_revenue"].apply(format_currency)
+
+    fig2 = px.pie(
         top10_revenue,
-        y="provider_name",
-        x="total_revenue",
-        color="total_revenue",
-        orientation="h",
-        hover_data=["total_encounters", "avg_cost_per_encounter"],
-        title="💵  Top 10 Providers by Revenue",
-        color_continuous_scale="Viridis"  # Different color scale for better visualization
+        names="provider_name",
+        values="total_revenue",
+        title="💵 Top 10 Providers by Revenue",
+        color_discrete_sequence=px.colors.sequential.Plasma
     )
-    fig2.update_layout(
-        yaxis={'categoryorder':'total ascending'},
-        height=500
+
+    fig2.update_traces(
+        textposition="inside",
+        texttemplate="%{label}<br>%{customdata}<br>",
+        customdata=top10_revenue["revenue_label"],
+        hoverinfo="skip",        # 🚫 disables hover
+        hovertemplate=None       # 🚫 removes hover box completely
     )
+
+    fig2.update_layout(height=500)
+
     st.plotly_chart(fig2, use_container_width=True)
 
-    # 3️⃣ Average Encounter Duration (Top 10)
+   # 3️⃣ Total Encounters & Unique Patients (Top 10)
     top10_enc = df.sort_values("total_encounters", ascending=False).head(10)
 
     fig_enc = px.bar(
         top10_enc,
         y="provider_name",
-        x=["total_encounters", "unique_patients"],  # Stacked
+        x=["total_encounters", "unique_patients"],  # Stacked values
         orientation="h",
         title="🚹 Total Encounters and Unique Patients by Provider",
         text_auto=True
     )
-    fig_enc.update_layout(yaxis={'categoryorder':'total ascending'}, barmode='stack', height=500)
+
+    fig_enc.update_layout(
+        yaxis_title="Provider Name",              # Y-axis label
+        xaxis_title="Total Encounters",           # X-axis label
+        yaxis={'categoryorder': 'total ascending'},
+        barmode='stack',
+        height=500
+    )
+
     st.plotly_chart(fig_enc, use_container_width=True)
 
     # Remove unwanted columns safely
@@ -292,19 +315,28 @@ elif page == "Provider Analytics":
 # --------------------------
 elif page == "Appointment Trends":
 
+    BASE_URL = "http://127.0.0.1:8000/api"
+
+    # -------------------------------
+    # Fetch Data
+    # -------------------------------
     data = requests.get(f"{BASE_URL}/appointments/analytics").json()
     df_appointments = pd.DataFrame(data)
-    
+
     st.markdown('<h3 style="color:red;">📅 Appointment Trends Dashboard</h3>', unsafe_allow_html=True)
 
-     # --- Fetch KPIs ---
+    # -------------------------------
+    # Fetch KPI Summary
+    # -------------------------------
     try:
         summary_data = requests.get(f"{BASE_URL}/appointments/summary").json()
         summary = summary_data[0] if isinstance(summary_data, list) and len(summary_data) > 0 else {}
     except:
         summary = {}
 
-    # --- Fetch Reasons ---
+    # -------------------------------
+    # Fetch Reasons
+    # -------------------------------
     try:
         reasons_data = requests.get(f"{BASE_URL}/appointments/reasons").json()
         if isinstance(reasons_data, dict):
@@ -312,7 +344,10 @@ elif page == "Appointment Trends":
     except:
         reasons_data = []
 
-    col1, col2, col3, col4, col5 = st.columns(5)
+    # -------------------------------
+    # KPI SECTION
+    # -------------------------------
+    col1, col2, col3, col4 = st.columns(4)
 
     def format_k_m(num):
         if num >= 1_000_000:
@@ -321,72 +356,53 @@ elif page == "Appointment Trends":
             return f"{num/1_000:.2f}K"
         return str(num)
 
-    col1.metric("📅 Total Encounters", format_k_m(summary.get("total_encounters",0)))
-    col2.metric("🧑‍🤝‍🧑 Unique Patients", format_k_m(summary.get("unique_patients",0)))
-    col3.metric("👨‍⚕️ Unique Providers", format_k_m(summary.get("unique_providers",0)))
-    col4.metric("⏱ Avg Duration (hrs)", f"{summary.get('avg_duration',0):.2f}")
-    col5.metric("💰 Total Cost ($)", f"{summary.get('total_cost',0)/1_000_000:.2f}M")
+    col1.metric("📅 Total Encounters", format_k_m(summary.get("total_encounters", 0)))
+    col2.metric("🧑‍🤝‍🧑 Unique Patients", format_k_m(summary.get("unique_patients", 0)))
+    col3.metric("👨‍⚕️ Unique Providers", format_k_m(summary.get("unique_providers", 0)))
+    col4.metric("💰 Total Cost ($)", f"{summary.get('total_cost', 0)/1_000_000:.2f}M")
 
-    
-    # Convert month_year to datetime for better x-axis handling
+    # -------------------------------
+    # PREPROCESS DATA
+    # -------------------------------
     df_appointments["month_year"] = pd.to_datetime(
-        df_appointments["year"].astype(str) + "-" + df_appointments["month"].astype(str) + "-01"
-    )
-    
-    # Filter out months with 0 appointments
-    df_nonzero = df_appointments[df_appointments["total_appointments"] > 0]
-    
-    # Filter for years 2000 to 2020
-    df_nonzero = df_nonzero[(df_nonzero["year"] >= 2000) & (df_nonzero["year"] <= 2020)]
-    
-    # Sort by month_year
-    df_nonzero = df_nonzero.sort_values("month_year")
-    
-    # --- Preprocess ---
-    df_appointments["month_year"] = pd.to_datetime(
-        df_appointments["year"].astype(str) + "-" + df_appointments["month"].astype(str) + "-01"
+        df_appointments["year"].astype(str) + "-" +
+        df_appointments["month"].astype(str) + "-01"
     )
 
-    # Filter relevant data
+    # Filter only years (NO non-zero filtering now)
     df_filtered = df_appointments[
-        (df_appointments["year"] >= 2017) &
-        (df_appointments["year"] <= 2020) &
-        (df_appointments["total_appointments"] > 0)
+        (df_appointments["year"] >= 2018) &
+        (df_appointments["year"] <= 2020)
     ]
 
-    # Aggregate by month_year and encounter_type
-    df_grouped = df_filtered.groupby(["month_year", "encounter_class"])["total_appointments"].sum().reset_index()
-    
-    # Pivot table for stacked bar
-    df_pivot = df_grouped.pivot(index="month_year", columns="encounter_class", values="total_appointments").fillna(0)
-    
-    # --- Plot ---
-    fig, ax = plt.subplots(figsize=(15,9))
+    df_grouped = df_filtered.groupby(
+    ["month_year", "encounter_class"]
+    )["total_appointments"].sum().reset_index()
 
-    # Use stacked bar
-    df_pivot.plot(kind="bar", stacked=True, ax=ax, width=0.8, colormap="tab20")
+    fig_area = px.line(
+    df_grouped,
+    x="month_year",
+    y="total_appointments",
+    color="encounter_class",
+    title="📊 Appointment Volume Distribution",
+    template="plotly_white",
+    labels= {
+        "month_year" : "Year"
+    }
+    )
 
-    # Reduce x-axis ticks to 1 per year to avoid clutter
-    tick_positions = [i for i in range(0, len(df_pivot), 12)]
-    tick_labels = [d.strftime("%b-%Y") for i,d in enumerate(df_pivot.index) if i % 12 == 0]
+    fig_area.update_xaxes(
+        tickformat="%Y",
+        dtick="M12"
+    )
 
-    ax.set_xticks(tick_positions)
-    ax.set_xticklabels(tick_labels, rotation=45, ha="right")
+    fig_area.update_yaxes(title="Total Appointments")
 
-    # Labels and title
-    ax.set_xlabel("Month-Year")
-    ax.set_ylabel("Total Appointments")
-    ax.set_title("Appointments Trend (2015 - 2020) - Stacked Bar Plot")
-
-    # Legend outside the plot
-    ax.legend(title="Encounter Class", bbox_to_anchor=(1.05, 1), loc='upper left')
-
-    plt.tight_layout()
-
-    # Display in Streamlit
-    st.pyplot(fig)
-
-    df_cum = df_nonzero.groupby("month_year")["total_appointments"].sum().cumsum().reset_index()
+    st.plotly_chart(fig_area, use_container_width=True)
+    # -------------------------------
+    # CUMULATIVE TREND
+    # -------------------------------
+    df_cum = df_filtered.groupby("month_year")["total_appointments"].sum().cumsum().reset_index()
 
     fig_cum = px.line(
         df_cum,
@@ -396,68 +412,92 @@ elif page == "Appointment Trends":
         template="plotly_white",
         markers=True
     )
+
     fig_cum.update_yaxes(title="Cumulative Appointments")
-    fig_cum.update_xaxes(title="Month-Year")
+    fig_cum.update_xaxes(title="Year")
+
     st.plotly_chart(fig_cum, use_container_width=True)
 
+    # -------------------------------
+    # TOP 10 REASONS
+    # -------------------------------
     df_reasons = pd.DataFrame(reasons_data)
-    for col in ["reason_code", "reason_description", "total_appointments", "unique_patients", "total_cost"]:
+
+    required_cols = ["reason_code", "reason_description",
+                     "total_appointments", "unique_patients", "total_cost"]
+
+    for col in required_cols:
         if col not in df_reasons.columns:
             df_reasons[col] = 0
 
     if not df_reasons.empty:
+
         fig_reason = px.bar(
             df_reasons.sort_values("total_appointments", ascending=False).head(10),
             x="reason_description",
             y="total_appointments",
             color="total_appointments",
             title="🧪 Top 10 Reasons for Appointments",
-            template="plotly_white"
+            template="plotly_white",
+            labels = {
+                "total_appointments" : "Total Appointmnets",
+                "reason_description" : "Reason"
+            }
         )
-        fig_reason.update_xaxes(tickangle=-45)
-        # Set y-axis range 0–1000 with tick every 100
-        fig_reason.update_yaxes(range=[0, 1000], dtick=100)
 
+        fig_reason.update_xaxes(tickangle=-45)
+        fig_reason.update_yaxes(range=[0, 1000])
+        fig_reason.update_coloraxes(cmin=0,cmax=1000)  
         st.plotly_chart(fig_reason, use_container_width=True)
+
     else:
         st.warning("No appointment reasons available.")
 
+    # -------------------------------
+    # COST ONLY COMPARISON (Orange + Values)
+    # -------------------------------
+    df_reason_cost = df_reasons.sort_values(
+        "total_cost", ascending=False
+    ).head(10)
 
-    df_reason_cost = df_reasons.sort_values("total_appointments", ascending=False).head(10)
-    df_melt = df_reason_cost.melt(id_vars=["reason_description"], value_vars=["total_appointments", "total_cost"],
-                                  var_name="metric", value_name="value")
-
-    fig = px.bar(
-        df_melt,
+    fig_compare = px.bar(
+        df_reason_cost,
         x="reason_description",
-        y="value",
-        color="metric",
-        barmode="group",
-        text="value",
-        title="Top 10 Appointment Reasons: Count vs Cost",
-        template="plotly_white"
+        y="total_cost",
+        title="💰 Top 10 Appointment Reasons by Cost",
+        template="plotly_white",
+        labels={
+            "reason_description": "Reason",
+            "total_cost": "Total Cost ($)"
+        },
+        text="total_cost",   # 🔥 show values
+        color_discrete_sequence=["#F39C12"]   # 🟠 Elegant Orange
     )
-    fig.update_xaxes(tickangle=-45)
-    # Set y-axis range up to 150k
-    fig.update_yaxes(range=[0, 150000])
-    st.plotly_chart(fig, use_container_width=True)
 
-    df_duration = df_appointments.groupby("encounter_class").agg(
-    avg_duration=("avg_duration", "mean"),
-    total_appointments=("total_appointments", "sum")
+    # Rotate x labels
+    fig_compare.update_xaxes(tickangle=-45)
+
+    # Set Y-axis range
+    fig_compare.update_yaxes(range=[0, 120000])
+
+    # Improve text appearance
+    fig_compare.update_traces(
+        texttemplate="%{text:.2s}",  # shows 120k style
+        textposition="outside"
+    )
+
+    # Remove extra margins
+    fig_compare.update_layout(height=550)
+
+    st.plotly_chart(fig_compare, use_container_width=True)
+    
+    # -------------------------------
+    # DURATION SCATTER
+    # -------------------------------
+    df_duration = df_filtered.groupby("encounter_class").agg(
+        avg_duration=("avg_duration", "mean"),
+        total_appointments=("total_appointments", "sum")
     ).reset_index()
-
-    fig_duration = px.scatter(
-        df_duration,
-        x="total_appointments",
-        y="avg_duration",
-        size="total_appointments",
-        color="encounter_class",
-        hover_name="encounter_class",
-        title="Average Duration vs Total Appointments by Encounter Class",
-        template="plotly_white"
-    )
-    st.plotly_chart(fig_duration, use_container_width=True)
 
 # --------------------------
 # READMISSION ANALYSIS
@@ -518,7 +558,10 @@ elif page == "Readmission Analysis":
         x="hospital_name",
         y="readmission_rate",
         color="readmission_rate",
-        title="🏥 Top 10 Hospital Readmission Comparison"
+        title="🏥 Top 10 Hospital Readmission Comparison",
+        labels={
+            "readmission_rate" : "Readmission Rate"
+        }
     )
 
     fig.update_layout(xaxis_tickangle=-45)  # Rotate labels
@@ -558,20 +601,16 @@ elif page == "Readmission Analysis":
 
     st.plotly_chart(fig_compare, use_container_width=True)
     
-    # ---------------- Distribution of Excess Readmission Ratios ----------------
-    fig_hist = px.histogram(df, x="readmission_rate", nbins=20,
-                            title="📊 Excess Readmission Ratio Distribution",
-                            color_discrete_sequence=["orange"])
-    fig_hist.update_layout(xaxis_title="Excess Readmission Ratio", yaxis_title="Count")
-    st.plotly_chart(fig_hist, use_container_width=True)
-
     df_measure = df.groupby("measure_name")["number_of_readmissions"].sum().sort_values(ascending=False).reset_index()
 
     fig_measure = px.bar(df_measure, x="measure_name", y="number_of_readmissions",
                          color="number_of_readmissions",
                          title="🧪 Number of Readmissions by Measure",
                          text="number_of_readmissions",
-                         color_continuous_scale="Blues")
+                         color_continuous_scale="Blues",
+                         labels={
+                             "measure_name" : "Measure Name"
+                         })
     fig_measure.update_layout(xaxis_tickangle=-45, yaxis_title="Number of Readmissions")
     st.plotly_chart(fig_measure, use_container_width=True)
 
