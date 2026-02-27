@@ -62,17 +62,14 @@ if page == "Overview":
         col1.metric(
             label="👨‍⚕️ Total Providers",
             value=len(df_providers),
-            delta=f"{len(df_providers) * 0.05:.0f}%",  # example delta
         )
         col2.metric(
             label="📅 Total Appointments",
             value=df_appointments["total_appointments"].sum(),
-            delta=f"{df_appointments['total_appointments'].sum() * 0.03:.0f}%",
         )
         col3.metric(
             label="🏥 Avg Readmission Rate",
             value=f"{round(df_readmissions['readmission_rate'].mean(), 2)}%",
-            delta=f"{round(df_readmissions['readmission_rate'].mean() * -0.02, 2)}%",  # negative delta as improvement
         )
         col4.metric(
             label="💉 Total Encounter Classes",  # Updated label
